@@ -1,10 +1,11 @@
+import os
 import asyncio
 import logging
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
 from aiogram import Bot, Dispatcher, Router, F
-from aiogram.filters import CommandStart, Command
+from aiogram.filters import CommandStart
 from aiogram.types import (
     Message, 
     CallbackQuery, 
@@ -14,10 +15,13 @@ from aiogram.types import (
     KeyboardButton
 )
 
-# ⚠️ Вставь сюда токен своего бота из @BotFather
-BOT_TOKEN = "ВАШ_ТОКЕН_БOTA"
+# Считываем токен из переменных окружения (Environment Variables в Render)
+BOT_TOKEN = os.getenv("BOT_TOKEN")
 
-# Настройка логирования
+if not BOT_TOKEN:
+    raise ValueError("ОШИБКА: Переменная окружения BOT_TOKEN не установлена! Добавь её в панели Render.")
+
+# Настройка логирования для вывода в консоль Render
 logging.basicConfig(level=logging.INFO)
 
 # Инициализация бота и роутера
@@ -54,7 +58,7 @@ SCHEDULE_TEXT = """
 🩺 *Оздоровительные процедуры — по назначению врача.*
 """
 
-# Главное меню (кнопки под строкой ввода)
+# Главное меню (обычные кнопки)
 main_kb = ReplyKeyboardMarkup(
     keyboard=[
         [KeyboardButton(text="🕒 Время по МСК")],
@@ -64,7 +68,7 @@ main_kb = ReplyKeyboardMarkup(
 )
 
 def get_current_activity(now_time: datetime) -> str:
-    """Сравнивает время со стендом Орловчанки"""
+    """Сравнивает время по МСК со стендом Орловчанки"""
     minutes_now = now_time.hour * 60 + now_time.minute
 
     schedule = [
@@ -91,7 +95,7 @@ def get_current_activity(now_time: datetime) -> str:
     return "🌙 **Сейчас:** Отбой и сон"
 
 def build_status_text() -> str:
-    """Генерирует плашку времени и статуса"""
+    """Генерирует текст с датой, временем по МСК и текущим событием"""
     msk_time = datetime.now(ZoneInfo("Europe/Moscow"))
     
     day = msk_time.day
@@ -110,7 +114,7 @@ def build_status_text() -> str:
     )
 
 def get_refresh_keyboard() -> InlineKeyboardMarkup:
-    """Кнопка прямо под сообщением"""
+    """Инлайн-кнопка под сообщением"""
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [InlineKeyboardButton(text="🔄 Обновить данные", callback_data="refresh_data")]
@@ -121,7 +125,7 @@ def get_refresh_keyboard() -> InlineKeyboardMarkup:
 @router.message(CommandStart())
 async def start_handler(message: Message):
     await message.answer(
-        "Привет! Я бот-помощник смены ДС «Орловчанка». 🌲\n Выбирай нужный раздел на клавиатуре ниже:",
+        "Привет! Я бот-помощник смены ДС «Орловчанка». 🌲\nВыбирай нужный раздел на клавиатуре ниже:",
         reply_markup=main_kb
     )
 
@@ -139,7 +143,7 @@ async def send_time_info(message: Message):
         reply_markup=get_refresh_keyboard()
     )
 
-# Обработка нажатия на inline-кнопку "Обновить данные"
+# Обработка нажатия на инлайн-кнопку "Обновить данные"
 @router.callback_query(F.data == "refresh_data")
 async def refresh_time_handler(callback: CallbackQuery):
     try:
@@ -152,10 +156,10 @@ async def refresh_time_handler(callback: CallbackQuery):
     except Exception:
         await callback.answer("Время уже актуально! ⚡")
 
-# Запуск бота
+# Главная функция запуска
 async def main():
     dp.include_router(router)
-    # Пропуск накопленных апдейтов при выключенном боте
+    # Сброс накопившихся сообщений за время оффлайна
     await bot.delete_webhook(drop_pending_updates=True)
     await dp.start_polling(bot)
 
